@@ -40,6 +40,9 @@
             maxlength="10"
             required
           />
+          <p id="date-error-message" class="error-message" hidden>
+            Bitte gib ein gültiges Datum ein.
+          </p>
         </div>
 
         <div class="field-group">
@@ -54,13 +57,12 @@
             maxlength="6"
             required
           />
+          <p id="weight-error-message" class="error-message" hidden>
+            Bitte gib ein gültiges Gewicht ein.
+          </p>
         </div>
 
         <button type="submit" class="primary-btn">Speichern</button>
-
-        <p id="error-message" class="error-message" hidden>
-          Bitte gib ein gültiges Gewicht ein.
-        </p>
       </form>
 
       <p class="local-note">
