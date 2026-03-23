@@ -45,6 +45,18 @@ form.addEventListener("submit", (event) => {
   weightInput.focus();
 });
 
+historyList.addEventListener("click", (event) => {
+  const button = event.target.closest(".delete-btn");
+  if (!button) return;
+
+  const dateToDelete = button.dataset.date;
+  if (!dateToDelete) return;
+
+  entries = entries.filter((entry) => entry.date !== dateToDelete);
+  saveEntries(entries);
+  render();
+});
+
 window.addEventListener("resize", renderChart);
 
 function loadEntries() {
@@ -115,6 +127,9 @@ function renderHistory() {
     const item = document.createElement("li");
     item.className = "history-item";
 
+    const main = document.createElement("div");
+    main.className = "history-main";
+
     const dateEl = document.createElement("span");
     dateEl.className = "history-date";
     dateEl.textContent = formatDate(entry.date);
@@ -123,8 +138,18 @@ function renderHistory() {
     weightEl.className = "history-weight";
     weightEl.textContent = `${entry.weight.toFixed(1)} kg`;
 
-    item.appendChild(dateEl);
-    item.appendChild(weightEl);
+    main.appendChild(dateEl);
+    main.appendChild(weightEl);
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "delete-btn";
+    deleteBtn.dataset.date = entry.date;
+    deleteBtn.setAttribute("aria-label", `Eintrag vom ${formatDate(entry.date)} löschen`);
+    deleteBtn.textContent = "Löschen";
+
+    item.appendChild(main);
+    item.appendChild(deleteBtn);
     historyList.appendChild(item);
   }
 }
