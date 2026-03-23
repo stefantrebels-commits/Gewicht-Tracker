@@ -14,6 +14,7 @@ setTodayAsDefault();
 render();
 
 dateInput.addEventListener("input", handleDateInput);
+weightInput.addEventListener("input", handleWeightInput);
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -65,6 +66,30 @@ function handleDateInput(event) {
   const raw = event.target.value;
   const digitsOnly = raw.replace(/\D/g, "").slice(0, 8);
   event.target.value = formatDateDigits(digitsOnly);
+}
+
+function handleWeightInput(event) {
+  let value = String(event.target.value);
+
+  value = value.replace(/\./g, ",");
+  value = value.replace(/[^\d,]/g, "");
+
+  const firstCommaIndex = value.indexOf(",");
+  if (firstCommaIndex !== -1) {
+    const beforeComma = value.slice(0, firstCommaIndex + 1);
+    const afterComma = value
+      .slice(firstCommaIndex + 1)
+      .replace(/,/g, "")
+      .slice(0, 1);
+
+    value = beforeComma + afterComma;
+  }
+
+  if (value.startsWith(",")) {
+    value = value.slice(1);
+  }
+
+  event.target.value = value;
 }
 
 function formatDateDigits(digits) {
@@ -156,7 +181,7 @@ function renderHistory() {
 
     const weightEl = document.createElement("span");
     weightEl.className = "history-weight";
-    weightEl.textContent = `${entry.weight.toFixed(1)} kg`;
+    weightEl.textContent = `${entry.weight.toFixed(1).replace(".", ",")} kg`;
 
     main.appendChild(dateEl);
     main.appendChild(weightEl);
@@ -275,10 +300,10 @@ function drawAxisLabels(context, width, height, sorted, minWeight, maxWeight) {
   context.fillText(lastDate, width - 10, height - 8);
 
   context.textAlign = "left";
-  context.fillText(`${maxWeight.toFixed(1)} kg`, 10, 16);
+  context.fillText(`${maxWeight.toFixed(1).replace(".", ",")} kg`, 10, 16);
 
   context.textAlign = "right";
-  context.fillText(`${minWeight.toFixed(1)} kg`, width - 10, 16);
+  context.fillText(`${minWeight.toFixed(1).replace(".", ",")} kg`, width - 10, 16);
 }
 
 function parseDateInputToIso(value) {
