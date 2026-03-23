@@ -3,7 +3,8 @@ const STORAGE_KEY = "gewicht-tracker-entries-v1";
 const form = document.getElementById("entry-form");
 const dateInput = document.getElementById("date");
 const weightInput = document.getElementById("weight");
-const errorMessage = document.getElementById("error-message");
+const dateErrorMessage = document.getElementById("date-error-message");
+const weightErrorMessage = document.getElementById("weight-error-message");
 const historyList = document.getElementById("history-list");
 const emptyState = document.getElementById("empty-state");
 const chartCanvas = document.getElementById("weight-chart");
@@ -22,12 +23,25 @@ form.addEventListener("submit", (event) => {
   const isoDate = parseDateInputToIso(dateInput.value);
   const weight = parseWeight(weightInput.value);
 
-  if (!isoDate || !Number.isFinite(weight) || weight <= 0 || weight > 500) {
-    showError(true);
-    return;
+  let hasError = false;
+
+  if (!isoDate) {
+    showDateError(true);
+    hasError = true;
+  } else {
+    showDateError(false);
   }
 
-  showError(false);
+  if (!Number.isFinite(weight) || weight <= 0 || weight > 500) {
+    showWeightError(true);
+    hasError = true;
+  } else {
+    showWeightError(false);
+  }
+
+  if (hasError) {
+    return;
+  }
 
   const normalizedWeight = roundToOneDecimal(weight);
   const newEntry = { date: isoDate, weight: normalizedWeight };
@@ -63,9 +77,12 @@ historyList.addEventListener("click", (event) => {
 window.addEventListener("resize", renderChart);
 
 function handleDateInput(event) {
-  const raw = event.target.value;
-  const digitsOnly = raw.replace(/\D/g, "").slice(0, 8);
-  event.target.value = formatDateDigits(digitsOnly);
+  const digitsOnly = String(event.target.value).replace(/\D/g, "").slice(0, 8);
+  event.target.value = formatDateDigitsFlexible(digitsOnly);
+
+  if (dateErrorMessage.hidden === false) {
+    showDateError(false);
+  }
 }
 
 function handleWeightInput(event) {
@@ -90,15 +107,23 @@ function handleWeightInput(event) {
   }
 
   event.target.value = value;
+
+  if (weightErrorMessage.hidden === false) {
+    showWeightError(false);
+  }
 }
 
-function formatDateDigits(digits) {
+function formatDateDigitsFlexible(digits) {
   if (digits.length <= 2) {
     return digits;
   }
 
   if (digits.length <= 4) {
     return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+  }
+
+  if (digits.length <= 6) {
+    return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4)}`;
   }
 
   return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4, 8)}`;
@@ -147,8 +172,12 @@ function roundToOneDecimal(value) {
   return Math.round(value * 10) / 10;
 }
 
-function showError(visible) {
-  errorMessage.hidden = !visible;
+function showDateError(visible) {
+  dateErrorMessage.hidden = !visible;
+}
+
+function showWeightError(visible) {
+  weightErrorMessage.hidden = !visible;
 }
 
 function render() {
@@ -308,13 +337,22 @@ function drawAxisLabels(context, width, height, sorted, minWeight, maxWeight) {
 
 function parseDateInputToIso(value) {
   const cleaned = String(value).trim();
-  const match = cleaned.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  const digits = cleaned.replace(/\D/g, "");
 
-  if (!match) return null;
+  if (!(digits.length === 6 || digits.length === 8)) {
+    return null;
+  }
 
-  const day = Number(match[1]);
-  const month = Number(match[2]);
-  const year = Number(match[3]);
+  const day = Number(digits.slice(0, 2));
+  const month = Number(digits.slice(2, 4));
+
+  let year;
+  if (digits.length === 6) {
+    const shortYear = Number(digits.slice(4, 6));
+    year = 2000 + shortYear;
+  } else {
+    year = Number(digits.slice(4, 8));
+  }
 
   if (month < 1 || month > 12) return null;
   if (day < 1 || day > 31) return null;
