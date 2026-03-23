@@ -68,18 +68,32 @@ label {
 }
 
 input {
+  display: block;
   width: 100%;
+  min-width: 0;
+  height: 60px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 14px 15px;
+  padding: 0 15px;
   font-size: 1rem;
   background: #fff;
   color: var(--text);
   outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
 }
 
 input:focus {
   border-color: var(--accent);
+}
+
+input[type="date"] {
+  line-height: 60px;
+}
+
+input[type="text"] {
+  line-height: normal;
 }
 
 .primary-btn {
