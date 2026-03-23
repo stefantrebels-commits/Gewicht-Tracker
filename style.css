@@ -11,7 +11,9 @@
   --radius: 18px;
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -25,6 +27,7 @@ body {
     "Segoe UI", sans-serif;
   background: var(--bg);
   color: var(--text);
+  overflow-x: hidden;
 }
 
 .app-shell {
@@ -33,9 +36,12 @@ body {
   margin: 0 auto;
   padding: 16px;
   padding-bottom: 32px;
+  overflow-x: hidden;
 }
 
 .card {
+  width: 100%;
+  max-width: 100%;
   background: var(--card);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -56,9 +62,15 @@ body {
   line-height: 1.5;
 }
 
-.field-group {
-  display: block;
+#entry-form {
   width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.field-group {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   margin-bottom: 14px;
 }
@@ -70,15 +82,18 @@ label {
   font-weight: 600;
 }
 
-input {
+input,
+textarea,
+select {
   display: block;
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  margin: 0;
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 14px 15px;
-  font-size: 1rem;
+  font-size: 16px;
   line-height: 1.2;
   background: #fff;
   color: var(--text);
