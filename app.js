@@ -13,6 +13,8 @@ let entries = loadEntries();
 setTodayAsDefault();
 render();
 
+dateInput.addEventListener("input", handleDateInput);
+
 form.addEventListener("submit", (event) => {
   event.preventDefault();
 
@@ -58,6 +60,24 @@ historyList.addEventListener("click", (event) => {
 });
 
 window.addEventListener("resize", renderChart);
+
+function handleDateInput(event) {
+  const raw = event.target.value;
+  const digitsOnly = raw.replace(/\D/g, "").slice(0, 8);
+  event.target.value = formatDateDigits(digitsOnly);
+}
+
+function formatDateDigits(digits) {
+  if (digits.length <= 2) {
+    return digits;
+  }
+
+  if (digits.length <= 4) {
+    return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+  }
+
+  return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4, 8)}`;
+}
 
 function loadEntries() {
   try {
