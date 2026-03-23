@@ -1,13 +1,16 @@
-const STORAGE_KEY = "gewicht-tracker-entries-v1";
+const STORAGE_KEY = "gewicht-tracker-entries-v2";
 
 const form = document.getElementById("entry-form");
 const dateInput = document.getElementById("date");
 const weightInput = document.getElementById("weight");
-const dateErrorMessage = document.getElementById("date-error-message");
-const weightErrorMessage = document.getElementById("weight-error-message");
+const timeOfDayInput = document.getElementById("timeOfDay");
+const stateInput = document.getElementById("state");
 const historyList = document.getElementById("history-list");
 const emptyState = document.getElementById("empty-state");
 const chartCanvas = document.getElementById("weight-chart");
+
+const defaultDatePlaceholder = "TT.MM.JJJJ";
+const defaultWeightPlaceholder = "z. B. 82,4";
 
 let entries = loadEntries();
 
@@ -16,6 +19,14 @@ render();
 
 dateInput.addEventListener("input", handleDateInput);
 weightInput.addEventListener("input", handleWeightInput);
+
+dateInput.addEventListener("focus", () => {
+  clearDateError();
+});
+
+weightInput.addEventListener("focus", () => {
+  clearWeightError();
+});
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -26,17 +37,17 @@ form.addEventListener("submit", (event) => {
   let hasError = false;
 
   if (!isoDate) {
-    showDateError(true);
+    showDateError();
     hasError = true;
   } else {
-    showDateError(false);
+    clearDateError();
   }
 
   if (!Number.isFinite(weight) || weight <= 0 || weight > 500) {
-    showWeightError(true);
+    showWeightError();
     hasError = true;
   } else {
-    showWeightError(false);
+    clearWeightError();
   }
 
   if (hasError) {
@@ -44,7 +55,12 @@ form.addEventListener("submit", (event) => {
   }
 
   const normalizedWeight = roundToOneDecimal(weight);
-  const newEntry = { date: isoDate, weight: normalizedWeight };
+  const newEntry = {
+    date: isoDate,
+    weight: normalizedWeight,
+    timeOfDay: timeOfDayInput.value,
+    state: stateInput.value,
+  };
 
   const existingIndex = entries.findIndex((entry) => entry.date === isoDate);
 
@@ -59,6 +75,7 @@ form.addEventListener("submit", (event) => {
   render();
 
   weightInput.value = "";
+  clearWeightError();
   weightInput.focus();
 });
 
@@ -66,10 +83,10 @@ historyList.addEventListener("click", (event) => {
   const button = event.target.closest(".delete-btn");
   if (!button) return;
 
-  const dateToDelete = button.dataset.date;
-  if (!dateToDelete) return;
+  const idToDelete = button.dataset.id;
+  if (!idToDelete) return;
 
-  entries = entries.filter((entry) => entry.date !== dateToDelete);
+  entries = entries.filter((entry) => getEntryId(entry) !== idToDelete);
   saveEntries(entries);
   render();
 });
@@ -80,8 +97,8 @@ function handleDateInput(event) {
   const digitsOnly = String(event.target.value).replace(/\D/g, "").slice(0, 8);
   event.target.value = formatDateDigitsFlexible(digitsOnly);
 
-  if (dateErrorMessage.hidden === false) {
-    showDateError(false);
+  if (dateInput.classList.contains("input-error")) {
+    clearDateError();
   }
 }
 
@@ -108,9 +125,31 @@ function handleWeightInput(event) {
 
   event.target.value = value;
 
-  if (weightErrorMessage.hidden === false) {
-    showWeightError(false);
+  if (weightInput.classList.contains("input-error")) {
+    clearWeightError();
   }
+}
+
+function showDateError() {
+  dateInput.value = "";
+  dateInput.placeholder = "Bitte gib ein gültiges Datum ein.";
+  dateInput.classList.add("input-error");
+}
+
+function clearDateError() {
+  dateInput.placeholder = defaultDatePlaceholder;
+  dateInput.classList.remove("input-error");
+}
+
+function showWeightError() {
+  weightInput.value = "";
+  weightInput.placeholder = "Bitte gib ein gültiges Gewicht ein.";
+  weightInput.classList.add("input-error");
+}
+
+function clearWeightError() {
+  weightInput.placeholder = defaultWeightPlaceholder;
+  weightInput.classList.remove("input-error");
 }
 
 function formatDateDigitsFlexible(digits) {
@@ -172,12 +211,8 @@ function roundToOneDecimal(value) {
   return Math.round(value * 10) / 10;
 }
 
-function showDateError(visible) {
-  dateErrorMessage.hidden = !visible;
-}
-
-function showWeightError(visible) {
-  weightErrorMessage.hidden = !visible;
+function getEntryId(entry) {
+  return `${entry.date}|${entry.timeOfDay || ""}|${entry.state || ""}`;
 }
 
 function render() {
@@ -212,13 +247,18 @@ function renderHistory() {
     weightEl.className = "history-weight";
     weightEl.textContent = `${entry.weight.toFixed(1).replace(".", ",")} kg`;
 
+    const metaEl = document.createElement("span");
+    metaEl.className = "history-meta";
+    metaEl.textContent = `${entry.timeOfDay || "morgens"} • ${entry.state || "nüchtern"}`;
+
     main.appendChild(dateEl);
     main.appendChild(weightEl);
+    main.appendChild(metaEl);
 
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.className = "delete-btn";
-    deleteBtn.dataset.date = entry.date;
+    deleteBtn.dataset.id = getEntryId(entry);
     deleteBtn.setAttribute("aria-label", `Eintrag vom ${formatDate(entry.date)} löschen`);
     deleteBtn.textContent = "Löschen";
 
