@@ -16,10 +16,10 @@ render();
 form.addEventListener("submit", (event) => {
   event.preventDefault();
 
-  const date = dateInput.value;
+  const isoDate = parseDateInputToIso(dateInput.value);
   const weight = parseWeight(weightInput.value);
 
-  if (!date || !Number.isFinite(weight) || weight <= 0 || weight > 500) {
+  if (!isoDate || !Number.isFinite(weight) || weight <= 0 || weight > 500) {
     showError(true);
     return;
   }
@@ -27,9 +27,9 @@ form.addEventListener("submit", (event) => {
   showError(false);
 
   const normalizedWeight = roundToOneDecimal(weight);
-  const newEntry = { date, weight: normalizedWeight };
+  const newEntry = { date: isoDate, weight: normalizedWeight };
 
-  const existingIndex = entries.findIndex((entry) => entry.date === date);
+  const existingIndex = entries.findIndex((entry) => entry.date === isoDate);
 
   if (existingIndex >= 0) {
     entries[existingIndex] = newEntry;
@@ -83,10 +83,10 @@ function saveEntries(data) {
 
 function setTodayAsDefault() {
   const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
   const day = String(today.getDate()).padStart(2, "0");
-  dateInput.value = `${year}-${month}-${day}`;
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const year = today.getFullYear();
+  dateInput.value = `${day}.${month}.${year}`;
 }
 
 function parseWeight(value) {
@@ -137,11 +137,6 @@ function renderHistory() {
   }
 }
 
-function formatDate(isoDate) {
-  const [year, month, day] = isoDate.split("-");
-  return `${day}.${month}.${year}`;
-}
-
 function renderChart() {
   const context = chartCanvas.getContext("2d");
   const parentWidth = chartCanvas.parentElement.clientWidth;
@@ -173,7 +168,7 @@ function renderChart() {
   const padding = {
     top: 20,
     right: 18,
-    bottom: 28,
+    bottom: 36,
     left: 18,
   };
 
@@ -186,8 +181,7 @@ function renderChart() {
         ? padding.left + chartWidth / 2
         : padding.left + (index / (sorted.length - 1)) * chartWidth;
 
-    const y =
-      padding.top + ((maxWeight - entry.weight) / range) * chartHeight;
+    const y = padding.top + ((maxWeight - entry.weight) / range) * chartHeight;
 
     return { x, y, date: entry.date, weight: entry.weight };
   });
@@ -248,6 +242,38 @@ function drawAxisLabels(context, width, height, sorted, minWeight, maxWeight) {
 
   context.textAlign = "right";
   context.fillText(`${minWeight.toFixed(1)} kg`, width - 10, 16);
+}
+
+function parseDateInputToIso(value) {
+  const cleaned = String(value).trim();
+  const match = cleaned.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+
+  if (month < 1 || month > 12) return null;
+  if (day < 1 || day > 31) return null;
+  if (year < 1900 || year > 2100) return null;
+
+  const testDate = new Date(year, month - 1, day);
+
+  if (
+    testDate.getFullYear() !== year ||
+    testDate.getMonth() !== month - 1 ||
+    testDate.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function formatDate(isoDate) {
+  const [year, month, day] = isoDate.split("-");
+  return `${day}.${month}.${year}`;
 }
 
 function formatShortDate(isoDate) {
