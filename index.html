@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  />
+  <title>Gewicht-Tracker</title>
+  <meta name="theme-color" content="#111827" />
+  <meta
+    name="description"
+    content="Trage dein Gewicht täglich ein und behalte den Verlauf im Blick."
+  />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./icons/icon-192.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./style.css" />
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="hero card">
+      <h1>Gewicht-Tracker</h1>
+      <p class="subtitle">
+        Trage dein Gewicht täglich ein und behalte den Verlauf im Blick.
+      </p>
+    </header>
+
+    <section class="card">
+      <form id="entry-form" novalidate>
+        <div class="field-group">
+          <label for="date">Datum</label>
+          <input id="date" name="date" type="date" required />
+        </div>
+
+        <div class="field-group">
+          <label for="weight">Gewicht in kg</label>
+          <input
+            id="weight"
+            name="weight"
+            type="text"
+            inputmode="decimal"
+            placeholder="z. B. 82,4"
+            required
+          />
+        </div>
+
+        <button type="submit" class="primary-btn">Speichern</button>
+
+        <p id="error-message" class="error-message" hidden>
+          Bitte gib ein gültiges Gewicht ein.
+        </p>
+      </form>
+
+      <p class="local-note">
+        Deine Daten werden nur lokal auf diesem Gerät gespeichert.
+      </p>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <h2>Verlauf als Grafik</h2>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="weight-chart" aria-label="Gewichtsverlauf"></canvas>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <h2>Verlauf als Liste</h2>
+      </div>
+
+      <p id="empty-state" class="empty-state">Noch keine Einträge vorhanden.</p>
+
+      <ul id="history-list" class="history-list" aria-live="polite"></ul>
+    </section>
+  </main>
+</body>
+</html>
