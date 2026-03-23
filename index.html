@@ -40,9 +40,6 @@
             maxlength="10"
             required
           />
-          <p id="date-error-message" class="error-message" hidden>
-            Bitte gib ein gültiges Datum ein.
-          </p>
         </div>
 
         <div class="field-group">
@@ -57,9 +54,23 @@
             maxlength="6"
             required
           />
-          <p id="weight-error-message" class="error-message" hidden>
-            Bitte gib ein gültiges Gewicht ein.
-          </p>
+        </div>
+
+        <div class="field-group">
+          <label for="timeOfDay">Tageszeit</label>
+          <select id="timeOfDay" name="timeOfDay" required>
+            <option value="morgens">morgens</option>
+            <option value="mittags">mittags</option>
+            <option value="abends">abends</option>
+          </select>
+        </div>
+
+        <div class="field-group">
+          <label for="state">Status</label>
+          <select id="state" name="state" required>
+            <option value="nüchtern">nüchtern</option>
+            <option value="nach dem Essen">nach dem Essen</option>
+          </select>
         </div>
 
         <button type="submit" class="primary-btn">Speichern</button>
