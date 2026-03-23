@@ -47,14 +47,6 @@ form.addEventListener("submit", (event) => {
 
 window.addEventListener("resize", renderChart);
 
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(() => {
-      // App funktioniert auch ohne Service Worker
-    });
-  });
-}
-
 function loadEntries() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
