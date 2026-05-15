@@ -6,99 +6,116 @@
     name="viewport"
     content="width=device-width, initial-scale=1, viewport-fit=cover"
   />
-  <title>Gewicht-Tracker</title>
-  <meta name="theme-color" content="#111827" />
+  <title>RunTimer</title>
+  <meta name="theme-color" content="#0f172a" />
   <meta
     name="description"
-    content="Trage dein Gewicht täglich ein und behalte den Verlauf im Blick."
+    content="Minimalistische mobile PWA für Intervall-Läufe mit Lauf- und Gehphasen."
   />
   <link rel="manifest" href="./manifest.json" />
   <link rel="icon" href="./icons/icon-192.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="./style.css" />
   <script src="./app.js" defer></script>
 </head>
-<body>
+<body class="phase-idle">
   <main class="app-shell">
-    <header class="hero card">
-      <h1>Gewicht-Tracker</h1>
-      <p class="subtitle">
-        Trage dein Gewicht täglich ein und behalte den Verlauf im Blick.
-      </p>
+    <header class="hero" aria-labelledby="app-title">
+      <p class="eyebrow">Intervall-Lauf PWA</p>
+      <h1 id="app-title">RunTimer</h1>
+      <p class="subtitle">Laufen, gehen, wiederholen – ohne Login, Tracking oder Ablenkung.</p>
     </header>
 
-    <section class="card">
-      <form id="entry-form" novalidate>
-        <div class="field-group">
-          <label for="date">Datum</label>
-          <input
-            id="date"
-            name="date"
-            type="text"
-            inputmode="numeric"
-            placeholder="TT.MM.JJJJ"
-            autocomplete="off"
-            maxlength="10"
-            required
-          />
+    <section class="timer-card" aria-labelledby="status-label">
+      <div class="round-label" id="round-label">Bereit für 10 Wiederholungen</div>
+      <p class="status-label" id="status-label" aria-live="polite">Bereit</p>
+      <output class="time-display" id="time-display" aria-live="polite">01:45</output>
+      <div class="phase-progress" aria-hidden="true">
+        <span id="phase-progress-bar"></span>
+      </div>
+      <p class="next-label" id="next-label">Startet mit Laufen</p>
+    </section>
+
+    <section class="controls-card" aria-label="Timer-Steuerung">
+      <button class="button button-primary" id="start-button" type="button">Start</button>
+      <div class="button-row">
+        <button class="button" id="pause-button" type="button" disabled>Pause</button>
+        <button class="button" id="reset-button" type="button" disabled>Reset</button>
+      </div>
+    </section>
+
+    <section class="settings-card" aria-labelledby="settings-title">
+      <div class="section-head">
+        <h2 id="settings-title">Intervall einstellen</h2>
+        <p>Standard: 1:45 Laufen, 1:15 Gehen, 10 Wiederholungen.</p>
+      </div>
+
+      <form id="settings-form" class="settings-form">
+        <div class="field-grid">
+          <label class="field">
+            <span>Laufen</span>
+            <input
+              id="run-duration"
+              name="runDuration"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              placeholder="1:45"
+              aria-describedby="duration-help"
+            />
+          </label>
+
+          <label class="field">
+            <span>Gehen</span>
+            <input
+              id="walk-duration"
+              name="walkDuration"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              placeholder="1:15"
+              aria-describedby="duration-help"
+            />
+          </label>
+
+          <label class="field repetitions-field">
+            <span>Wiederholungen</span>
+            <input
+              id="repetitions"
+              name="repetitions"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              max="99"
+              step="1"
+            />
+          </label>
         </div>
 
-        <div class="field-group">
-          <label for="weight">Gewicht in kg</label>
-          <input
-            id="weight"
-            name="weight"
-            type="text"
-            inputmode="decimal"
-            placeholder="z. B. 82,4"
-            autocomplete="off"
-            maxlength="6"
-            required
-          />
-        </div>
+        <p class="help-text" id="duration-help">Zeitformat: Minuten:Sekunden, z. B. 1:45.</p>
 
-        <div class="field-group">
-          <label for="timeOfDay">Tageszeit</label>
-          <select id="timeOfDay" name="timeOfDay" required>
-            <option value="morgens">morgens</option>
-            <option value="mittags">mittags</option>
-            <option value="abends">abends</option>
-          </select>
-        </div>
+        <div class="toggle-list">
+          <label class="toggle">
+            <input id="vibration-enabled" name="vibrationEnabled" type="checkbox" />
+            <span>
+              <strong>Vibration</strong>
+              <small id="vibration-note">Beim Wechsel kurz vibrieren, falls unterstützt.</small>
+            </span>
+          </label>
 
-        <div class="field-group">
-          <label for="state">Status</label>
-          <select id="state" name="state" required>
-            <option value="nüchtern">nüchtern</option>
-            <option value="nach dem Essen">nach dem Essen</option>
-          </select>
+          <label class="toggle">
+            <input id="sound-enabled" name="soundEnabled" type="checkbox" />
+            <span>
+              <strong>Ton</strong>
+              <small>Beim Wechsel einen kurzen Signalton abspielen.</small>
+            </span>
+          </label>
         </div>
-
-        <button type="submit" class="primary-btn">Speichern</button>
       </form>
-
-      <p class="local-note">
-        Deine Daten werden nur lokal auf diesem Gerät gespeichert.
-      </p>
     </section>
 
-    <section class="card">
-      <div class="section-head">
-        <h2>Verlauf als Grafik</h2>
-      </div>
-      <div class="chart-wrap">
-        <canvas id="weight-chart" aria-label="Gewichtsverlauf"></canvas>
-      </div>
-    </section>
-
-    <section class="card">
-      <div class="section-head">
-        <h2>Verlauf als Liste</h2>
-      </div>
-
-      <p id="empty-state" class="empty-state">Noch keine Einträge vorhanden.</p>
-
-      <ul id="history-list" class="history-list" aria-live="polite"></ul>
-    </section>
+    <footer class="privacy-note">
+      Einstellungen werden ausschließlich lokal in deinem Browser gespeichert.
+    </footer>
   </main>
 </body>
 </html>
