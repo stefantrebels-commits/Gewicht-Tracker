@@ -1,422 +1,383 @@
-const STORAGE_KEY = "gewicht-tracker-entries-v2";
+const SETTINGS_KEY = "runtimer-settings-v1";
 
-const form = document.getElementById("entry-form");
-const dateInput = document.getElementById("date");
-const weightInput = document.getElementById("weight");
-const timeOfDayInput = document.getElementById("timeOfDay");
-const stateInput = document.getElementById("state");
-const historyList = document.getElementById("history-list");
-const emptyState = document.getElementById("empty-state");
-const chartCanvas = document.getElementById("weight-chart");
+const DEFAULT_SETTINGS = {
+  runSeconds: 105,
+  walkSeconds: 75,
+  repetitions: 10,
+  vibrationEnabled: true,
+  soundEnabled: false,
+};
 
-const defaultDatePlaceholder = "TT.MM.JJJJ";
-const defaultWeightPlaceholder = "z. B. 82,4";
+const PHASES = {
+  IDLE: "idle",
+  RUN: "run",
+  WALK: "walk",
+  PAUSED: "paused",
+  DONE: "done",
+};
 
-let entries = loadEntries();
+const statusLabel = document.getElementById("status-label");
+const timeDisplay = document.getElementById("time-display");
+const roundLabel = document.getElementById("round-label");
+const nextLabel = document.getElementById("next-label");
+const progressBar = document.getElementById("phase-progress-bar");
+const startButton = document.getElementById("start-button");
+const pauseButton = document.getElementById("pause-button");
+const resetButton = document.getElementById("reset-button");
+const runDurationInput = document.getElementById("run-duration");
+const walkDurationInput = document.getElementById("walk-duration");
+const repetitionsInput = document.getElementById("repetitions");
+const vibrationInput = document.getElementById("vibration-enabled");
+const vibrationNote = document.getElementById("vibration-note");
+const soundInput = document.getElementById("sound-enabled");
+const settingsForm = document.getElementById("settings-form");
 
-setTodayAsDefault();
-render();
+let settings = loadSettings();
+let timerId = null;
+let audioContext = null;
+let currentPhase = PHASES.IDLE;
+let previousActivePhase = PHASES.RUN;
+let currentRepetition = 1;
+let phaseDurationMs = settings.runSeconds * 1000;
+let remainingMs = phaseDurationMs;
+let phaseEndAt = null;
 
-dateInput.addEventListener("input", handleDateInput);
-weightInput.addEventListener("input", handleWeightInput);
+hydrateSettingsForm();
+configureFeatureAvailability();
+resetTimer({ keepSettings: true });
 
-dateInput.addEventListener("focus", () => {
-  clearDateError();
-});
+startButton.addEventListener("click", handleStartButton);
+pauseButton.addEventListener("click", pauseTimer);
+resetButton.addEventListener("click", () => resetTimer());
+settingsForm.addEventListener("change", handleSettingsChange);
 
-weightInput.addEventListener("focus", () => {
-  clearWeightError();
-});
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js");
+  });
+}
 
-form.addEventListener("submit", (event) => {
-  event.preventDefault();
-
-  const isoDate = parseDateInputToIso(dateInput.value);
-  const weight = parseWeight(weightInput.value);
-
-  let hasError = false;
-
-  if (!isoDate) {
-    showDateError();
-    hasError = true;
-  } else {
-    clearDateError();
-  }
-
-  if (!Number.isFinite(weight) || weight <= 0 || weight > 500) {
-    showWeightError();
-    hasError = true;
-  } else {
-    clearWeightError();
-  }
-
-  if (hasError) {
+function handleStartButton() {
+  if (currentPhase === PHASES.PAUSED) {
+    resumeTimer();
     return;
   }
 
-  const normalizedWeight = roundToOneDecimal(weight);
-  const newEntry = {
-    date: isoDate,
-    weight: normalizedWeight,
-    timeOfDay: timeOfDayInput.value,
-    state: stateInput.value,
+  if (currentPhase === PHASES.DONE) {
+    resetTimer({ keepSettings: true });
+  }
+
+  startTimer();
+}
+
+function startTimer() {
+  applySettingsFromForm();
+  unlockAudio();
+  currentPhase = PHASES.RUN;
+  previousActivePhase = PHASES.RUN;
+  currentRepetition = 1;
+  phaseDurationMs = settings.runSeconds * 1000;
+  remainingMs = phaseDurationMs;
+  beginPhaseCountdown();
+  notifyPhaseChange();
+  render();
+}
+
+function pauseTimer() {
+  if (currentPhase !== PHASES.RUN && currentPhase !== PHASES.WALK) {
+    return;
+  }
+
+  remainingMs = Math.max(0, phaseEndAt - Date.now());
+  previousActivePhase = currentPhase;
+  currentPhase = PHASES.PAUSED;
+  stopTicking();
+  render();
+}
+
+function resumeTimer() {
+  currentPhase = previousActivePhase;
+  beginPhaseCountdown();
+  render();
+}
+
+function resetTimer(options = {}) {
+  stopTicking();
+
+  if (!options.keepSettings) {
+    applySettingsFromForm();
+  }
+
+  currentPhase = PHASES.IDLE;
+  previousActivePhase = PHASES.RUN;
+  currentRepetition = 1;
+  phaseDurationMs = settings.runSeconds * 1000;
+  remainingMs = phaseDurationMs;
+  phaseEndAt = null;
+  render();
+}
+
+function beginPhaseCountdown() {
+  stopTicking();
+  phaseEndAt = Date.now() + remainingMs;
+  timerId = window.setInterval(tick, 250);
+  tick();
+}
+
+function tick() {
+  remainingMs = Math.max(0, phaseEndAt - Date.now());
+
+  if (remainingMs <= 0) {
+    advancePhase();
+    return;
+  }
+
+  render();
+}
+
+function advancePhase() {
+  if (currentPhase === PHASES.RUN) {
+    currentPhase = PHASES.WALK;
+    previousActivePhase = PHASES.WALK;
+    phaseDurationMs = settings.walkSeconds * 1000;
+    remainingMs = phaseDurationMs;
+    beginPhaseCountdown();
+    notifyPhaseChange();
+    render();
+    return;
+  }
+
+  if (currentPhase === PHASES.WALK && currentRepetition < settings.repetitions) {
+    currentRepetition += 1;
+    currentPhase = PHASES.RUN;
+    previousActivePhase = PHASES.RUN;
+    phaseDurationMs = settings.runSeconds * 1000;
+    remainingMs = phaseDurationMs;
+    beginPhaseCountdown();
+    notifyPhaseChange();
+    render();
+    return;
+  }
+
+  finishTimer();
+}
+
+function finishTimer() {
+  stopTicking();
+  currentPhase = PHASES.DONE;
+  previousActivePhase = PHASES.RUN;
+  remainingMs = 0;
+  phaseEndAt = null;
+  notifyPhaseChange();
+  render();
+}
+
+function stopTicking() {
+  if (timerId) {
+    window.clearInterval(timerId);
+    timerId = null;
+  }
+}
+
+function handleSettingsChange() {
+  applySettingsFromForm();
+
+  if (currentPhase === PHASES.IDLE || currentPhase === PHASES.DONE) {
+    resetTimer({ keepSettings: true });
+  } else {
+    render();
+  }
+}
+
+function applySettingsFromForm() {
+  settings = {
+    runSeconds: clampDuration(parseDuration(runDurationInput.value), DEFAULT_SETTINGS.runSeconds),
+    walkSeconds: clampDuration(parseDuration(walkDurationInput.value), DEFAULT_SETTINGS.walkSeconds),
+    repetitions: clampNumber(Number(repetitionsInput.value), 1, 99, DEFAULT_SETTINGS.repetitions),
+    vibrationEnabled: vibrationInput.checked && canVibrate(),
+    soundEnabled: soundInput.checked,
   };
 
-  const existingIndex = entries.findIndex((entry) => entry.date === isoDate);
-
-  if (existingIndex >= 0) {
-    entries[existingIndex] = newEntry;
-  } else {
-    entries.push(newEntry);
-  }
-
-  entries.sort((a, b) => a.date.localeCompare(b.date));
-  saveEntries(entries);
-  render();
-
-  weightInput.value = "";
-  clearWeightError();
-  weightInput.focus();
-});
-
-historyList.addEventListener("click", (event) => {
-  const button = event.target.closest(".delete-btn");
-  if (!button) return;
-
-  const idToDelete = button.dataset.id;
-  if (!idToDelete) return;
-
-  entries = entries.filter((entry) => getEntryId(entry) !== idToDelete);
-  saveEntries(entries);
-  render();
-});
-
-window.addEventListener("resize", renderChart);
-
-function handleDateInput(event) {
-  const digitsOnly = String(event.target.value).replace(/\D/g, "").slice(0, 8);
-  event.target.value = formatDateDigitsFlexible(digitsOnly);
-
-  if (dateInput.classList.contains("input-error")) {
-    clearDateError();
-  }
+  hydrateSettingsForm();
+  saveSettings(settings);
 }
 
-function handleWeightInput(event) {
-  let value = String(event.target.value);
-
-  value = value.replace(/\./g, ",");
-  value = value.replace(/[^\d,]/g, "");
-
-  const firstCommaIndex = value.indexOf(",");
-  if (firstCommaIndex !== -1) {
-    const beforeComma = value.slice(0, firstCommaIndex + 1);
-    const afterComma = value
-      .slice(firstCommaIndex + 1)
-      .replace(/,/g, "")
-      .slice(0, 1);
-
-    value = beforeComma + afterComma;
-  }
-
-  if (value.startsWith(",")) {
-    value = value.slice(1);
-  }
-
-  event.target.value = value;
-
-  if (weightInput.classList.contains("input-error")) {
-    clearWeightError();
-  }
-}
-
-function showDateError() {
-  dateInput.value = "";
-  dateInput.placeholder = "Bitte gib ein gültiges Datum ein.";
-  dateInput.classList.add("input-error");
-}
-
-function clearDateError() {
-  dateInput.placeholder = defaultDatePlaceholder;
-  dateInput.classList.remove("input-error");
-}
-
-function showWeightError() {
-  weightInput.value = "";
-  weightInput.placeholder = "Bitte gib ein gültiges Gewicht ein.";
-  weightInput.classList.add("input-error");
-}
-
-function clearWeightError() {
-  weightInput.placeholder = defaultWeightPlaceholder;
-  weightInput.classList.remove("input-error");
-}
-
-function formatDateDigitsFlexible(digits) {
-  if (digits.length <= 2) {
-    return digits;
-  }
-
-  if (digits.length <= 4) {
-    return `${digits.slice(0, 2)}.${digits.slice(2)}`;
-  }
-
-  if (digits.length <= 6) {
-    return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4)}`;
-  }
-
-  return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4, 8)}`;
-}
-
-function loadEntries() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed
-      .filter(
-        (entry) =>
-          entry &&
-          typeof entry.date === "string" &&
-          typeof entry.weight === "number" &&
-          Number.isFinite(entry.weight)
-      )
-      .sort((a, b) => a.date.localeCompare(b.date));
-  } catch {
-    return [];
-  }
-}
-
-function saveEntries(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
-function setTodayAsDefault() {
-  const today = new Date();
-  const day = String(today.getDate()).padStart(2, "0");
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  const year = today.getFullYear();
-  dateInput.value = `${day}.${month}.${year}`;
-}
-
-function parseWeight(value) {
-  const cleaned = String(value).trim().replace(",", ".");
-  return Number(cleaned);
-}
-
-function roundToOneDecimal(value) {
-  return Math.round(value * 10) / 10;
-}
-
-function getEntryId(entry) {
-  return `${entry.date}|${entry.timeOfDay || ""}|${entry.state || ""}`;
+function hydrateSettingsForm() {
+  runDurationInput.value = formatDuration(settings.runSeconds);
+  walkDurationInput.value = formatDuration(settings.walkSeconds);
+  repetitionsInput.value = String(settings.repetitions);
+  vibrationInput.checked = settings.vibrationEnabled && canVibrate();
+  soundInput.checked = settings.soundEnabled;
 }
 
 function render() {
-  renderHistory();
-  renderChart();
+  document.body.classList.remove("phase-idle", "phase-run", "phase-walk", "phase-paused", "phase-done");
+  document.body.classList.add(`phase-${currentPhase}`);
+
+  statusLabel.textContent = getStatusText();
+  timeDisplay.value = formatClockDuration(Math.ceil(remainingMs / 1000));
+  roundLabel.textContent = getRoundText();
+  nextLabel.textContent = getNextText();
+  progressBar.style.transform = `scaleX(${getProgressRatio()})`;
+
+  const isActive = currentPhase === PHASES.RUN || currentPhase === PHASES.WALK;
+  const isPaused = currentPhase === PHASES.PAUSED;
+
+  startButton.textContent = isPaused ? "Fortsetzen" : currentPhase === PHASES.DONE ? "Neu starten" : "Start";
+  startButton.disabled = isActive;
+  pauseButton.disabled = !isActive;
+  resetButton.disabled = currentPhase === PHASES.IDLE;
+
+  runDurationInput.disabled = isActive || isPaused;
+  walkDurationInput.disabled = isActive || isPaused;
+  repetitionsInput.disabled = isActive || isPaused;
 }
 
-function renderHistory() {
-  historyList.innerHTML = "";
-
-  if (entries.length === 0) {
-    emptyState.hidden = false;
-    return;
-  }
-
-  emptyState.hidden = true;
-
-  const displayEntries = [...entries].sort((a, b) => b.date.localeCompare(a.date));
-
-  for (const entry of displayEntries) {
-    const item = document.createElement("li");
-    item.className = "history-item";
-
-    const main = document.createElement("div");
-    main.className = "history-main";
-
-    const dateEl = document.createElement("span");
-    dateEl.className = "history-date";
-    dateEl.textContent = formatDate(entry.date);
-
-    const weightEl = document.createElement("span");
-    weightEl.className = "history-weight";
-    weightEl.textContent = `${entry.weight.toFixed(1).replace(".", ",")} kg`;
-
-    const metaEl = document.createElement("span");
-    metaEl.className = "history-meta";
-    metaEl.textContent = `${entry.timeOfDay || "morgens"} • ${entry.state || "nüchtern"}`;
-
-    main.appendChild(dateEl);
-    main.appendChild(weightEl);
-    main.appendChild(metaEl);
-
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "delete-btn";
-    deleteBtn.dataset.id = getEntryId(entry);
-    deleteBtn.setAttribute("aria-label", `Eintrag vom ${formatDate(entry.date)} löschen`);
-    deleteBtn.textContent = "Löschen";
-
-    item.appendChild(main);
-    item.appendChild(deleteBtn);
-    historyList.appendChild(item);
-  }
+function getStatusText() {
+  if (currentPhase === PHASES.RUN) return "Laufen";
+  if (currentPhase === PHASES.WALK) return "Gehen";
+  if (currentPhase === PHASES.PAUSED) return "Pausiert";
+  if (currentPhase === PHASES.DONE) return "Fertig";
+  return "Bereit";
 }
 
-function renderChart() {
-  const context = chartCanvas.getContext("2d");
-  const parentWidth = chartCanvas.parentElement.clientWidth;
-  const cssWidth = Math.max(280, parentWidth - 4);
-  const cssHeight = 220;
-  const dpr = window.devicePixelRatio || 1;
-
-  chartCanvas.width = cssWidth * dpr;
-  chartCanvas.height = cssHeight * dpr;
-  chartCanvas.style.width = `${cssWidth}px`;
-  chartCanvas.style.height = `${cssHeight}px`;
-
-  context.setTransform(dpr, 0, 0, dpr, 0, 0);
-  context.clearRect(0, 0, cssWidth, cssHeight);
-
-  drawChartBackground(context, cssWidth, cssHeight);
-
-  if (entries.length === 0) {
-    return;
+function getRoundText() {
+  if (currentPhase === PHASES.IDLE) {
+    return `Bereit für ${settings.repetitions} ${settings.repetitions === 1 ? "Wiederholung" : "Wiederholungen"}`;
   }
 
-  const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
-  const weights = sorted.map((entry) => entry.weight);
-
-  const minWeight = Math.min(...weights);
-  const maxWeight = Math.max(...weights);
-  const range = Math.max(maxWeight - minWeight, 1);
-
-  const padding = {
-    top: 20,
-    right: 18,
-    bottom: 36,
-    left: 18,
-  };
-
-  const chartWidth = cssWidth - padding.left - padding.right;
-  const chartHeight = cssHeight - padding.top - padding.bottom;
-
-  const points = sorted.map((entry, index) => {
-    const x =
-      sorted.length === 1
-        ? padding.left + chartWidth / 2
-        : padding.left + (index / (sorted.length - 1)) * chartWidth;
-
-    const y = padding.top + ((maxWeight - entry.weight) / range) * chartHeight;
-
-    return { x, y, date: entry.date, weight: entry.weight };
-  });
-
-  context.beginPath();
-  context.lineWidth = 2.5;
-  context.strokeStyle = "#111827";
-
-  points.forEach((point, index) => {
-    if (index === 0) {
-      context.moveTo(point.x, point.y);
-    } else {
-      context.lineTo(point.x, point.y);
-    }
-  });
-
-  context.stroke();
-
-  for (const point of points) {
-    context.beginPath();
-    context.fillStyle = "#111827";
-    context.arc(point.x, point.y, 3.5, 0, Math.PI * 2);
-    context.fill();
+  if (currentPhase === PHASES.DONE) {
+    return `${settings.repetitions} ${settings.repetitions === 1 ? "Wiederholung" : "Wiederholungen"} geschafft`;
   }
 
-  drawAxisLabels(context, cssWidth, cssHeight, sorted, minWeight, maxWeight);
+  return `Wiederholung ${currentRepetition} von ${settings.repetitions}`;
 }
 
-function drawChartBackground(context, width, height) {
-  context.strokeStyle = "#e5e7eb";
-  context.lineWidth = 1;
+function getNextText() {
+  if (currentPhase === PHASES.IDLE) return "Startet mit Laufen";
+  if (currentPhase === PHASES.RUN) return "Danach: Gehen";
+  if (currentPhase === PHASES.WALK && currentRepetition < settings.repetitions) return "Danach: Laufen";
+  if (currentPhase === PHASES.WALK) return "Danach: Fertig";
+  if (currentPhase === PHASES.PAUSED) return "Timer ist angehalten";
+  return "Training abgeschlossen";
+}
 
-  const lines = 4;
-  for (let i = 1; i <= lines; i++) {
-    const y = (height / (lines + 1)) * i;
-    context.beginPath();
-    context.moveTo(0, y);
-    context.lineTo(width, y);
-    context.stroke();
+function getProgressRatio() {
+  if (currentPhase === PHASES.IDLE) return 1;
+  if (currentPhase === PHASES.DONE) return 0;
+  return Math.max(0, Math.min(1, remainingMs / phaseDurationMs));
+}
+
+function notifyPhaseChange() {
+  if (settings.vibrationEnabled && canVibrate()) {
+    navigator.vibrate(currentPhase === PHASES.DONE ? [180, 80, 180] : 160);
+  }
+
+  if (settings.soundEnabled) {
+    playTone(currentPhase === PHASES.DONE ? 660 : currentPhase === PHASES.RUN ? 880 : 520);
   }
 }
 
-function drawAxisLabels(context, width, height, sorted, minWeight, maxWeight) {
-  context.fillStyle = "#6b7280";
-  context.font = "12px system-ui, sans-serif";
+function unlockAudio() {
+  if (!settings.soundEnabled || audioContext) return;
 
-  const firstDate = formatShortDate(sorted[0].date);
-  const lastDate = formatShortDate(sorted[sorted.length - 1].date);
-
-  context.textAlign = "left";
-  context.fillText(firstDate, 10, height - 8);
-
-  context.textAlign = "right";
-  context.fillText(lastDate, width - 10, height - 8);
-
-  context.textAlign = "left";
-  context.fillText(`${maxWeight.toFixed(1).replace(".", ",")} kg`, 10, 16);
-
-  context.textAlign = "right";
-  context.fillText(`${minWeight.toFixed(1).replace(".", ",")} kg`, width - 10, 16);
+  audioContext = new (window.AudioContext || window.webkitAudioContext)();
 }
 
-function parseDateInputToIso(value) {
-  const cleaned = String(value).trim();
-  const digits = cleaned.replace(/\D/g, "");
+function playTone(frequency) {
+  const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextConstructor) return;
 
-  if (!(digits.length === 6 || digits.length === 8)) {
-    return null;
+  if (!audioContext) {
+    audioContext = new AudioContextConstructor();
   }
 
-  const day = Number(digits.slice(0, 2));
-  const month = Number(digits.slice(2, 4));
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  const now = audioContext.currentTime;
 
-  let year;
-  if (digits.length === 6) {
-    const shortYear = Number(digits.slice(4, 6));
-    year = 2000 + shortYear;
-  } else {
-    year = Number(digits.slice(4, 8));
-  }
-
-  if (month < 1 || month > 12) return null;
-  if (day < 1 || day > 31) return null;
-  if (year < 1900 || year > 2100) return null;
-
-  const testDate = new Date(year, month - 1, day);
-
-  if (
-    testDate.getFullYear() !== year ||
-    testDate.getMonth() !== month - 1 ||
-    testDate.getDate() !== day
-  ) {
-    return null;
-  }
-
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(frequency, now);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.18, now + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+  oscillator.connect(gain);
+  gain.connect(audioContext.destination);
+  oscillator.start(now);
+  oscillator.stop(now + 0.24);
 }
 
-function formatDate(isoDate) {
-  const [year, month, day] = isoDate.split("-");
-  return `${day}.${month}.${year}`;
+function loadSettings() {
+  const raw = localStorage.getItem(SETTINGS_KEY);
+  if (!raw) return { ...DEFAULT_SETTINGS };
+
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      runSeconds: clampDuration(Number(parsed.runSeconds), DEFAULT_SETTINGS.runSeconds),
+      walkSeconds: clampDuration(Number(parsed.walkSeconds), DEFAULT_SETTINGS.walkSeconds),
+      repetitions: clampNumber(Number(parsed.repetitions), 1, 99, DEFAULT_SETTINGS.repetitions),
+      vibrationEnabled: Boolean(parsed.vibrationEnabled),
+      soundEnabled: Boolean(parsed.soundEnabled),
+    };
+  } catch {
+    return { ...DEFAULT_SETTINGS };
+  }
 }
 
-function formatShortDate(isoDate) {
-  const [year, month, day] = isoDate.split("-");
-  return `${day}.${month}.`;
+function saveSettings(nextSettings) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(nextSettings));
+}
+
+function parseDuration(value) {
+  const text = String(value).trim();
+  if (!text) return NaN;
+
+  if (text.includes(":")) {
+    const [minutesPart, secondsPart = "0"] = text.split(":");
+    const minutes = Number(minutesPart);
+    const seconds = Number(secondsPart);
+    if (!Number.isInteger(minutes) || !Number.isInteger(seconds)) return NaN;
+    return minutes * 60 + seconds;
+  }
+
+  const seconds = Number(text);
+  return Number.isInteger(seconds) ? seconds : NaN;
+}
+
+function formatDuration(totalSeconds) {
+  const safeSeconds = Math.max(0, Number(totalSeconds) || 0);
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatClockDuration(totalSeconds) {
+  const safeSeconds = Math.max(0, Number(totalSeconds) || 0);
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function clampDuration(value, fallback) {
+  return clampNumber(value, 5, 5999, fallback);
+}
+
+function clampNumber(value, min, max, fallback) {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function canVibrate() {
+  return "vibrate" in navigator;
+}
+
+function configureFeatureAvailability() {
+  if (!canVibrate()) {
+    vibrationInput.checked = false;
+    vibrationInput.disabled = true;
+    vibrationNote.textContent = "Vibration wird von diesem Browser nicht unterstützt.";
+    settings.vibrationEnabled = false;
+    saveSettings(settings);
+  }
 }
