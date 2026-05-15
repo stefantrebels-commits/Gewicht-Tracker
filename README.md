@@ -54,3 +54,9 @@ http://localhost:8080
 ## Hinweise
 
 Mobile Browser können Timer, Ton oder Vibration einschränken, wenn die App im Hintergrund ist oder der Bildschirm gesperrt wird. Für zuverlässige Nutzung sollte RunTimer während des Trainings geöffnet bleiben.
+
+## Getestet
+
+- iPhone 11 mit Safari: Start, Pause, Fortsetzen, Reset, gespeicherte Einstellungen und Timer im gesperrten Zustand funktionieren.
+- Ton funktioniert auf dem iPhone, wenn der Stumm-Modus deaktiviert ist.
+- Vibration ist auf iPhone/Safari nicht verfügbar und wird von der App entsprechend deaktiviert.
